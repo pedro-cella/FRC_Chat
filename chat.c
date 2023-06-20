@@ -158,6 +158,15 @@ void list_participants(int roomIndex) {
     }
 }
 
+void show_help() {
+    printf("Comandos disponíveis:\n");
+    printf("/create <nome_sala> - Cria uma nova sala\n");
+    printf("/join <índice_sala> - Entra em uma sala existente\n");
+    printf("/list - Lista as salas disponíveis\n");
+    printf("/list_participants <índice_sala> - Lista os participantes de uma sala\n");
+    printf("/help - Mostra esta mensagem de ajuda\n");
+}
+
 int main(int argc, char *argv[]) {
     setup_socket(argc, argv);
 
@@ -190,7 +199,9 @@ int main(int argc, char *argv[]) {
                             int roomIndex;
                             sscanf(input, "/list_participants %d", &roomIndex);
                             list_participants(roomIndex - 1);
-                        } else {
+                        } else if (strncmp(input, "/help", 5) == 0) {
+                            show_help();
+                        }else {
                             printf("Comando inválido\n");
                         }
                     } else {
