@@ -15,7 +15,13 @@
 
 typedef struct {
     int id;
+    char username[20];  // Adicionando o nome de usuário
 } Participant;
+
+
+// Declare uma lista global de participantes
+Participant participants[MAX_PARTICIPANTS];
+int numParticipants = 0;
 
 typedef struct {
     char name[MAX_ROOM_NAME];
@@ -75,6 +81,38 @@ void handle_new_connection() {
     FD_SET(newfd, &master);
     if (newfd > fdmax)
         fdmax = newfd;
+
+    printf("Nova conexão: cliente %d\n", newfd);
+    fflush(stdout);  // Limpar o buffer de saída antes de ler a entrada do usuário
+
+    // Enviar uma mensagem para o cliente solicitar o nome de usuário
+    char msg[] = "Digite seu nome de usuário: ";
+    send(newfd, msg, sizeof(msg), 0);
+
+        // Solicitar o nome de usuário e atribuir o ID único ao participante
+    Participant newParticipant;
+    newParticipant.id = newfd;
+
+    // Receber o nome de usuário do cliente
+    memset(&buf, 0, sizeof(buf));
+    nbytes = recv(newfd, buf, sizeof(buf), 0);
+    if (nbytes <= 0) {
+        // Lidar com erro de leitura
+        printf("Erro ao receber o nome de usuário do cliente %d\n", newfd);
+        close(newfd);
+        FD_CLR(newfd, &master);
+        return;
+    }
+
+    // Copiar o nome de usuário para a estrutura do participante
+    strncpy(newParticipant.username, buf, sizeof(newParticipant.username) - 1);
+    newParticipant.username[sizeof(newParticipant.username) - 1] = '\0';
+
+    // Adicionar o novo participante à lista de participantes
+    participants[numParticipants] = newParticipant;
+    numParticipants++;
+
+    printf("Usuário '%s' conectado com sucesso\n", newParticipant.username);
 }
 
 void receive_and_send_messages() {
@@ -124,6 +162,10 @@ void join_room(int roomIndex, int participantFd) {
         }
 
         room->participants[room->numParticipants].id = participantId;
+        printf("Digite um nome de usuário: ");
+        scanf("%s", room->participants[room->numParticipants].username);
+        getchar();  // Limpar o caractere de nova linha residual
+
         room->numParticipants++;
 
         printf("Você entrou na sala '%s'\n", room->name);
@@ -131,8 +173,6 @@ void join_room(int roomIndex, int participantFd) {
         printf("Sala não encontrada\n");
     }
 }
-
-
 
 void list_rooms() {
     if (numRooms == 0) {
@@ -151,20 +191,34 @@ void list_participants(int roomIndex) {
         ChatRoom *room = &chatRooms[roomIndex];
         printf("Participantes da sala '%s':\n", room->name);
         for (i = 0; i < room->numParticipants; i++) {
-            printf("%d. Participante %d\n", i + 1, room->participants[i].id);
+            printf("%d. %s (ID: %d)\n", i + 1, room->participants[i].username, room->participants[i].id);
         }
     } else {
         printf("Sala não encontrada\n");
     }
 }
 
+void list_users() {
+    if (numParticipants == 0) {
+        printf("Nenhum usuário está conectado.\n");
+    } else {
+        printf("Usuários conectados:\n");
+        for (int i = 0; i < numParticipants; i++) {
+            printf("%d. [ID: %d] Usuário: %s", i+1, participants[i].id, participants[i].username);
+        }
+    }
+}
+
+
+
 void show_help() {
     printf("Comandos disponíveis:\n");
     printf("/create <nome_sala> - Cria uma nova sala\n");
     printf("/join <índice_sala> - Entra em uma sala existente\n");
     printf("/list - Lista as salas disponíveis\n");
-    printf("/list_participants <índice_sala> - Lista os participantes de uma sala\n");
+    printf("/users <índice_sala> - Lista os participantes de uma sala\n");
     printf("/help - Mostra esta mensagem de ajuda\n");
+    printf("/n");
 }
 
 int main(int argc, char *argv[]) {
@@ -195,13 +249,11 @@ int main(int argc, char *argv[]) {
                             join_room(roomIndex - 1, i);
                         } else if (strncmp(input, "/list", 5) == 0) {
                             list_rooms();
-                        } else if (strncmp(input, "/list_participants", 18) == 0) {
-                            int roomIndex;
-                            sscanf(input, "/list_participants %d", &roomIndex);
-                            list_participants(roomIndex - 1);
+                        } else if (strncmp(input, "/users", 6) == 0) {
+                            list_users();
                         } else if (strncmp(input, "/help", 5) == 0) {
                             show_help();
-                        }else {
+                        } else {
                             printf("Comando inválido\n");
                         }
                     } else {
