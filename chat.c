@@ -141,6 +141,18 @@ void create_room(char *roomName) {
     printf("Sala '%s' criada com sucesso\n", roomName);
 }
 
+// Função responsável por listar os usuários conectados no servidor
+void list_users() {
+    if (numParticipants == 0) {
+        printf("Nenhum usuário está conectado.\n");
+    } else {
+        printf("Usuários conectados:\n");
+        for (int i = 0; i < numParticipants; i++) {
+            printf("%d. [ID: %d] Usuário: %s", i+1, participants[i].id, participants[i].username);
+        }
+    }
+}
+
 void join_room(int roomIndex, int participantFd) {
     if (roomIndex >= 0 && roomIndex < numRooms) {
         ChatRoom *room = &chatRooms[roomIndex];
@@ -149,30 +161,47 @@ void join_room(int roomIndex, int participantFd) {
             return;
         }
 
-        int participantId;
-        printf("Digite um identificador único: ");
-        scanf("%d", &participantId);
+        if (numParticipants == 0) {
+            printf("Nenhum usuário conectado no momento\n");
+            return;
+        }
 
-        // Verifica se o identificador já está em uso
-        for (i = 0; i < room->numParticipants; i++) {
-            if (room->participants[i].id == participantId) {
-                printf("Identificador já em uso. Tente novamente.\n");
-                return;
+        list_users();  // Mostrar os usuários conectados
+        printf("Digite o ID do usuário que deseja adicionar: ");
+        int userId;
+        scanf("%d", &userId);
+
+        // Verificar se o usuário com o ID fornecido está conectado
+        int userIndex = -1;
+        for (int i = 0; i < numParticipants; i++) {
+            if (participants[i].id == userId) {
+                userIndex = i;
+                break;
             }
         }
 
-        room->participants[room->numParticipants].id = participantId;
-        printf("Digite um nome de usuário: ");
-        scanf("%s", room->participants[room->numParticipants].username);
-        getchar();  // Limpar o caractere de nova linha residual
+        if (userIndex != -1) {
+            // Verificar se o usuário já está na sala
+            for (int i = 0; i < room->numParticipants; i++) {
+                if (room->participants[i].id == userId) {
+                    printf("Usuário já está na sala\n");
+                    return;
+                }
+            }
 
-        room->numParticipants++;
-
-        printf("Você entrou na sala '%s'\n", room->name);
+            // Adicionar o participante à sala
+            room->participants[room->numParticipants] = participants[userIndex];
+            room->numParticipants++;
+            printf("Usuário '%s' adicionado à sala '%s'\n", participants[userIndex].username, room->name);
+        } else {
+            printf("Usuário não encontrado\n");
+        }
     } else {
         printf("Sala não encontrada\n");
     }
 }
+
+
 
 void list_rooms() {
     if (numRooms == 0) {
@@ -198,19 +227,6 @@ void list_participants(int roomIndex) {
     }
 }
 
-void list_users() {
-    if (numParticipants == 0) {
-        printf("Nenhum usuário está conectado.\n");
-    } else {
-        printf("Usuários conectados:\n");
-        for (int i = 0; i < numParticipants; i++) {
-            printf("%d. [ID: %d] Usuário: %s", i+1, participants[i].id, participants[i].username);
-        }
-    }
-}
-
-
-
 void show_help() {
     printf("Comandos disponíveis:\n");
     printf("/create <nome_sala> - Cria uma nova sala\n");
@@ -218,11 +234,12 @@ void show_help() {
     printf("/list - Lista as salas disponíveis\n");
     printf("/users <índice_sala> - Lista os participantes de uma sala\n");
     printf("/help - Mostra esta mensagem de ajuda\n");
-    printf("/n");
+    printf("\n");
 }
 
 int main(int argc, char *argv[]) {
     setup_socket(argc, argv);
+    int isFirstConnection = 1;
 
     for (;;) {
         read_fds = master;
