@@ -13,6 +13,12 @@
 #define MAX_ROOM_NAME 50
 #define MAX_PARTICIPANTS 10
 
+#ifdef _WIN32
+    #define CLEAR_COMMAND "cls"
+#else
+    #define CLEAR_COMMAND "clear"
+#endif
+
 typedef struct {
     int id;
     char username[20];  // Adicionando o nome de usuário
@@ -201,8 +207,6 @@ void join_room(int roomIndex, int participantFd) {
     }
 }
 
-
-
 void list_rooms() {
     if (numRooms == 0) {
         printf("Não há salas disponíveis\n");
@@ -218,14 +222,56 @@ void list_rooms() {
 void list_participants(int roomIndex) {
     if (roomIndex >= 0 && roomIndex < numRooms) {
         ChatRoom *room = &chatRooms[roomIndex];
-        printf("Participantes da sala '%s':\n", room->name);
-        for (i = 0; i < room->numParticipants; i++) {
-            printf("%d. %s (ID: %d)\n", i + 1, room->participants[i].username, room->participants[i].id);
+        if (room->numParticipants == 0) {
+            printf("Não há participantes nesta sala\n");
+        } else {
+            printf("Participantes da sala '%s':\n", room->name);
+            for (int i = 0; i < room->numParticipants; i++) {
+                printf("%d. [ID: %d] Usuário: %s\n", i + 1, room->participants[i].id, room->participants[i].username);
+            }
         }
     } else {
         printf("Sala não encontrada\n");
     }
 }
+
+void remove_room(int roomIndex) {
+    if (roomIndex >= 0 && roomIndex < numRooms) {
+        ChatRoom *room = &chatRooms[roomIndex];
+        printf("Sala '%s' removida com sucesso\n", room->name);
+
+        // Remover a sala da lista de salas
+        for (int i = roomIndex; i < numRooms - 1; i++) {
+            chatRooms[i] = chatRooms[i + 1];
+        }
+
+        numRooms--;
+    } else {
+        printf("Sala não encontrada\n");
+    }
+}
+
+void remove_participant(int roomIndex, int participantIndex) {
+    if (roomIndex >= 0 && roomIndex < numRooms) {
+        ChatRoom *room = &chatRooms[roomIndex];
+        if (participantIndex >= 0 && participantIndex < room->numParticipants) {
+            Participant *participant = &room->participants[participantIndex];
+            printf("Participante '%s' removido com sucesso da sala '%s'\n", participant->username, room->name);
+
+            // Remover o participante da sala
+            for (int i = participantIndex; i < room->numParticipants - 1; i++) {
+                room->participants[i] = room->participants[i + 1];
+            }
+
+            room->numParticipants--;
+        } else {
+            printf("Participante não encontrado\n");
+        }
+    } else {
+        printf("Sala não encontrada\n");
+    }
+}
+
 
 void show_help() {
     printf("Comandos disponíveis:\n");
@@ -233,9 +279,14 @@ void show_help() {
     printf("/join <índice_sala> - Entra em uma sala existente\n");
     printf("/list - Lista as salas disponíveis\n");
     printf("/users <índice_sala> - Lista os participantes de uma sala\n");
+    printf("/room <índice_sala> - Visualiza participantes de uma sala\n");
+    printf("/remove_room <índice_sala> - Remove uma sala existente\n");
+    printf("/remove_participant <índice_sala> <índice_participante> - Remove um participante de uma sala\n");
+    printf("/clean - Limpa o terminal\n");
     printf("/help - Mostra esta mensagem de ajuda\n");
     printf("\n");
 }
+
 
 int main(int argc, char *argv[]) {
     setup_socket(argc, argv);
@@ -268,8 +319,22 @@ int main(int argc, char *argv[]) {
                             list_rooms();
                         } else if (strncmp(input, "/users", 6) == 0) {
                             list_users();
+                        } else if (strncmp(input, "/room", 5) == 0) {
+                            int roomIndex;
+                            sscanf(input, "/room %d", &roomIndex);
+                            list_participants(roomIndex - 1);
+                        } else if (strncmp(input, "/clean", 6) == 0) {
+                            system(CLEAR_COMMAND);
                         } else if (strncmp(input, "/help", 5) == 0) {
                             show_help();
+                        } else if (strncmp(input, "/remove_room", 12) == 0) {
+                            int roomIndex;
+                            sscanf(input, "/remove_room %d", &roomIndex);
+                            remove_room(roomIndex - 1);
+                        } else if (strncmp(input, "/remove_participant", 19) == 0) {
+                            int roomIndex, participantIndex;
+                            sscanf(input, "/remove_participant %d %d", &roomIndex, &participantIndex);
+                            remove_participant(roomIndex - 1, participantIndex - 1);
                         } else {
                             printf("Comando inválido\n");
                         }
@@ -283,3 +348,4 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
+
