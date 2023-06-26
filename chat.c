@@ -44,6 +44,21 @@ char buf[256];
 ChatRoom chatRooms[MAX_ROOMS];
 int numRooms = 0;
 
+
+void show_help() {
+    printf("Comandos disponíveis:\n");
+    printf("/create <nome_sala> - Cria uma nova sala\n");
+    printf("/join <índice_sala> - Entra em uma sala existente\n");
+    printf("/list - Lista as salas disponíveis\n");
+    printf("/users <índice_sala> - Lista os participantes de uma sala\n");
+    printf("/room <índice_sala> - Visualiza participantes de uma sala\n");
+    printf("/remove_room <índice_sala> - Remove uma sala existente\n");
+    printf("/remove_participant <índice_sala> <índice_participante> - Remove um participante de uma sala\n");
+    printf("/clean - Limpa o terminal\n");
+    printf("/help - Mostra esta mensagem de ajuda\n");
+    printf("\n");
+}
+
 void send_msg(int sender_fd) {
     for (j = 0; j <= fdmax; j++) {
         if (FD_ISSET(j, &master)) {
@@ -83,6 +98,8 @@ void setup_socket(int argc, char *argv[]) {
 }
 
 void handle_new_connection() {
+    // show_help();
+
     newfd = accept(sd, (struct sockaddr *)&remoteaddr, &addrlen);
     FD_SET(newfd, &master);
     if (newfd > fdmax)
@@ -273,24 +290,11 @@ void remove_participant(int roomIndex, int participantIndex) {
 }
 
 
-void show_help() {
-    printf("Comandos disponíveis:\n");
-    printf("/create <nome_sala> - Cria uma nova sala\n");
-    printf("/join <índice_sala> - Entra em uma sala existente\n");
-    printf("/list - Lista as salas disponíveis\n");
-    printf("/users <índice_sala> - Lista os participantes de uma sala\n");
-    printf("/room <índice_sala> - Visualiza participantes de uma sala\n");
-    printf("/remove_room <índice_sala> - Remove uma sala existente\n");
-    printf("/remove_participant <índice_sala> <índice_participante> - Remove um participante de uma sala\n");
-    printf("/clean - Limpa o terminal\n");
-    printf("/help - Mostra esta mensagem de ajuda\n");
-    printf("\n");
-}
-
-
 int main(int argc, char *argv[]) {
     setup_socket(argc, argv);
     int isFirstConnection = 1;
+
+    show_help();
 
     for (;;) {
         read_fds = master;
