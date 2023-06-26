@@ -21,6 +21,7 @@
 
 typedef struct {
     int id;
+    int chatId;
     char username[20];  // Adicionando o nome de usuário
 } Participant;
 
