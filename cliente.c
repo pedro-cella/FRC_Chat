@@ -1,93 +1,129 @@
+#include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netdb.h>
-#include <stdio.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
-
-#define BUFFER_SIZE 256
-
-void error(const char *msg) {
-    perror(msg);
-    exit(1);
-}
+#include <constants.h>
 
 int createSocket() {
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0)
-        error("Erro ao abrir o socket");
+    if (sockfd < 0) {
+        perror("Erro ao criar o socket");
+        return -1;
+    }
     return sockfd;
 }
 
-void connectToServer(int sockfd, const char *hostname, int portno) {
-    struct sockaddr_in serv_addr;
-    struct hostent *server;
-
-    server = gethostbyname(hostname);
-    if (server == NULL)
-        error("Erro, host não encontrado");
-
-    bzero((char *)&serv_addr, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-    bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
-    serv_addr.sin_port = htons(portno);
-
-    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-        error("Erro ao conectar");
+int connectToServer(int sockfd, const char* serverIP, int serverPort) {
+    struct sockaddr_in serverAddr;
+    memset(&serverAddr, 0, sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(serverPort);
+    if (inet_pton(AF_INET, serverIP, &serverAddr.sin_addr) <= 0) {
+        perror("Erro ao converter o endereço IP");
+        return -1;
+    }
+    if (connect(sockfd, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        perror("Erro ao conectar ao servidor");
+        return -1;
+    }
+    return 0;
 }
 
-void sendMessage(int sockfd, const char *message) {
-    int n = write(sockfd, message, strlen(message));
-    if (n < 0)
-        error("Erro ao escrever no socket");
+int sendData(int sockfd, const char* data, int length) {
+    int bytesSent = send(sockfd, data, length, 0);
+    if (bytesSent < 0) {
+        perror("Erro ao enviar dados para o servidor");
+        return -1;
+    }
+    return bytesSent;
 }
 
-void receiveMessage(int sockfd, char *buffer) {
-    bzero(buffer, BUFFER_SIZE);
-    int n = read(sockfd, buffer, BUFFER_SIZE - 1);
-    if (n < 0)
-        error("Erro ao ler do socket");
+int receiveData(int sockfd, char* buffer, int bufferSize) {
+    int bytesRead = recv(sockfd, buffer, bufferSize - 1, 0);
+    if (bytesRead < 0) {
+        perror("Erro ao receber dados do servidor");
+        return -1;
+    }
+    buffer[bytesRead] = '\0';  // Adiciona um terminador de string no final dos dados recebidos
+    return bytesRead;
 }
 
-int main(int argc, char *argv[]) {
+void closeSocket(int sockfd) {
+    close(sockfd);
+}
+
+void printRoomList(char* roomList) {
+    printf("Salas disponíveis:\n");
+    char* roomInfo = strtok(roomList, "\n");
+    int count = 1;
+    while (roomInfo != NULL) {
+        printf("%d. %s\n", count, roomInfo);
+        roomInfo = strtok(NULL, "\n");
+        count++;
+    }
+}
+
+
+int main(int argc, char* argv[]) {
     if (argc < 3) {
         printf("Digite IP e Porta para se conectar ao servidor\n");
-        exit(1);
+        return 1;
     }
 
-    int sockfd, portno;
-    char buffer[BUFFER_SIZE];
+    const char* serverIP = argv[1];
+    int serverPort = atoi(argv[2]);
 
-    portno = atoi(argv[2]);
-    sockfd = createSocket();
-    connectToServer(sockfd, argv[1], portno);
+    int sockfd = createSocket();
+    if (sockfd < 0) {
+        return 1;
+    }
 
-    printf("Conectado ao servidor.\n");
+    if (connectToServer(sockfd, serverIP, serverPort) < 0) {
+        closeSocket(sockfd);
+        return 1;
+    }
+    
+    // Recebe a lista de salas do servidor
+    char roomList[256];
+    int bytesRead = receiveData(sockfd, roomList, sizeof(roomList));
+    if (bytesRead < 0) {
+        closeSocket(sockfd);
+        return 1;
+    }
+    printRoomList(roomList);
 
-    receiveMessage(sockfd, buffer);
-    printf("%s\n", buffer);
-
+    char input[256];
     while (1) {
-        bzero(buffer, BUFFER_SIZE);
-        fgets(buffer, BUFFER_SIZE - 1, stdin);
+        // Lê a entrada do usuário
+        fgets(input, sizeof(input), stdin);
+        input[strcspn(input, "\n")] = '\0';  // Remove o caractere de nova linha do final
 
-        sendMessage(sockfd, buffer);
-
-        if (strcmp(buffer, "/quit\n") == 0) {
+        // Verifica se o usuário quer sair
+        if (strcmp(input, "/quit") == 0) {
             break;
         }
 
-        receiveMessage(sockfd, buffer);
-        printf("%s\n", buffer);
-
-        if (strcmp(buffer, "Você foi desconectado.\n") == 0) {
-            // Encerra a conexão se o servidor enviar a mensagem de desconexão
-            break;
+        // Envia os dados para o servidor
+        if (sendData(sockfd, input, strlen(input)) < 0) {
+            closeSocket(sockfd);
+            return 1;
         }
+
+        // Recebe a resposta do servidor
+        char buffer[256];
+        int bytesRead = receiveData(sockfd, buffer, sizeof(buffer));
+        if (bytesRead < 0) {
+            closeSocket(sockfd);
+            return 1;
+        }
+        printf("Resposta do servidor: %s\n", buffer);
     }
 
-    close(sockfd);
+    closeSocket(sockfd);
+
     return 0;
 }
