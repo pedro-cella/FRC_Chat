@@ -38,7 +38,15 @@ int server_response(int socket, char* msg) {
     return 1;
 }
 
-void create_room(const char* roomName) {
+char *copystring(char *restrict dest, char const *restrict source, size_t elements) {
+    char *d;
+    for (d = dest; d + 1 < dest + elements; d++, source++)
+        *d = *source;
+    *d = '\0';
+    return d;
+}
+
+void create_room(int socket, char* roomName) {
   // Verificar se o número máximo de salas já foi alcançado
   if (numRooms >= MAX_ROOMS) {
     printf("Limite máximo de salas alcançado.\n");
@@ -62,9 +70,14 @@ void create_room(const char* roomName) {
   // Criar a nova sala
   ChatRoom newRoom;  // Declara uma variável do tipo ChatRoom para representar a
                      // nova sala
+  printf("CreateROOm: %s\n", roomName);
+  // strcpy(newRoom->name, roomName);  // Copia o nome fornecido para o campo 'name' da nova sala
 
-  strcpy(newRoom.name,
-         roomName);  // Copia o nome fornecido para o campo 'name' da nova sala
+  copystring(newRoom.name, roomName, strlen(roomName));
+  for(int i =0; newRoom.name[i]; i++){
+    printf("%d\n", newRoom.name[i]);
+  }
+
 
   // Inicializa o número de clientes da nova sala como
   newRoom.numClients = 0;  // 0, já que não há clientes conectados ainda
@@ -76,11 +89,15 @@ void create_room(const char* roomName) {
 
   numRooms++;  // Incrementa o contador de salas para refletir a adição da nova
                // sala
-
-  printf("Sala '%s' criada com sucesso.\n", roomName);
+  char msg[MAX_MSG_SIZE];
+  snprintf(msg, sizeof(msg), "Sala '%s' criada com sucesso.\n",
+               newRoom.name);
+  server_response(socket, msg);
 }
 
-void delete_room(const char* roomName) {
+
+
+void delete_room(char* roomName) {
   int roomIndex = -1;
 
   // Procura pelo índice da sala com o nome fornecido
@@ -229,7 +246,8 @@ int execute_command(int i, char *input) {
   if (strncmp(input, "/create", 7) == 0) {
     char roomName[MAX_ROOM_NAME_LENGTH];
     sscanf(input, "/create %[^\n]", roomName);
-    create_room(roomName);
+    create_room(i, roomName);
+    printf("%s\n", chatRooms[numRooms-1].name);
   } else if (strncmp(input, "/list", 5) == 0) {
     list_rooms(i);
   } else if (strncmp(input, "/delete", 7) == 0) {
