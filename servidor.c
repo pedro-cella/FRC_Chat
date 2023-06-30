@@ -68,6 +68,7 @@ int compare(char *str1, char *str2) {
 
 }
 
+// Apresentou problemas quando dois clientes de sockets diferentes tentaram entrar na mesma sala
 int search_client_in_room(int socket){
 
   for (int i = 0; i < numRooms; i++){
@@ -81,6 +82,20 @@ int search_client_in_room(int socket){
   return -1;
 }
 
+int find_client_room(int socket) {
+  for (int i = 0; i < numRooms; i++) {
+    for (int j = 0; j < chatRooms[i].numClients; j++) {
+      if (chatRooms[i].clients[j] == socket) {
+        return i; // Retorna o número da sala em que o cliente está
+      }
+    }
+  }
+  
+  return -1; // Cliente não está em nenhuma sala
+}
+
+
+//TODO - Ao criar a sala ele engole o último caractere do nome
 void create_room(int socket, char* roomName) {
   // Verificar se o número máximo de salas já foi alcançado
   if (numRooms >= MAX_ROOMS) {
@@ -95,9 +110,8 @@ void create_room(int socket, char* roomName) {
   }
 
   // Verificar se o nome da sala já está em uso
-  // TODO: Fix essa função, não esta detectando o nome igual quando o nome é enviado por uma conexao socket.
   for (int i = 0; i < numRooms; i++) {
-    if (strcmp(chatRooms[i].name, roomName) == 0) {
+    if (strncmp(chatRooms[i].name, roomName, strlen(chatRooms[i].name)) == 0) {
       server_response(socket, "Já existe uma sala com esse nome.\n");
       return;
     }
@@ -171,11 +185,13 @@ int join_room(int socket, char *room_name){
 
 
   //? Possibilidade de troca de sala.
-  int result_search = search_client_in_room(socket);
+  int result_search = find_client_room(socket);
+  
   if (result_search >= 0){
     server_response(socket, "Usuario está conectado em outra sala.\n");
     return 0;
   }
+
 
   ChatRoom *room = &chatRooms[room_index];
 
@@ -321,7 +337,13 @@ int execute_command(int i, char *input) {
   } else if (strncmp(input, "/clear", 6) == 0) {
     system(CLEAR_COMMAND);
   } else {
-    printf("SOCKET %d: %s\n", i, input);
+    // Teste
+    int sala = search_client_in_room(i);
+    if(sala != -1){
+      envia_msg(i, sala);
+    }else{
+      printf("SOCKET %d: %s\n", i, input);
+    }
   }
 }
 
@@ -337,13 +359,12 @@ void handle_command(int i) {
       list_connections();
     }
   } else {
-    while ((bytes_read =
-                read(i, input + msg_size, sizeof(input) - msg_size - 1)) > 0) {
-      msg_size += bytes_read;
-      if (msg_size > MAX_MSG_SIZE - 1 || input[msg_size - 1] == '\n') {
-        break;
+      while ((bytes_read = read(i, input + msg_size, sizeof(input) - msg_size - 1)) > 0) {
+        msg_size += bytes_read;
+        if (msg_size > MAX_MSG_SIZE - 1 || input[msg_size - 1] == '\n') {
+          break;
+        }
       }
-    }
   }
 
   execute_command(i, input);
