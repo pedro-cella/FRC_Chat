@@ -46,6 +46,30 @@ char *copystring(char *restrict dest, char const *restrict source, size_t elemen
     return d;
 }
 
+int compare(char *str1, char *str2) {
+
+  printf("Comparing s1: %s; s2: %s.\n", str1, str2);
+
+  while (*str1 && *str1 == *str2) {
+    str1++;
+    str2++;
+  }
+  return *str1 - *str2;
+}
+
+int search_client_in_room(int socket){
+
+  for (int i = 0; i < numRooms; i++){
+    for (int j = 0; i < chatRooms[i].numClients; j++){
+      if (chatRooms[i].clients[j] == socket){
+        return i;
+      }
+    }
+  }
+
+  return -1;
+}
+
 void create_room(int socket, char* roomName) {
   // Verificar se o número máximo de salas já foi alcançado
   if (numRooms >= MAX_ROOMS) {
@@ -74,10 +98,9 @@ void create_room(int socket, char* roomName) {
   // strcpy(newRoom->name, roomName);  // Copia o nome fornecido para o campo 'name' da nova sala
   // Inicializa o número de clientes da nova sala como
   copystring(newRoom.name, roomName, strlen(roomName));
-  newRoom.numClients = 1;  // 0, já que não há clientes conectados ainda
+  newRoom.numClients = 0;  // 0, já que não há clientes conectados ainda
   newRoom.roomID = idGenerator++;
   newRoom.admUser = i;
-
   // Adiciona a nova sala ao array de salas
   chatRooms[numRooms] = newRoom;  // 'chatRooms' na posição 'numRooms'
   numRooms++;  // Incrementa o contador de salas para refletir a adição da nova
@@ -89,20 +112,30 @@ void create_room(int socket, char* roomName) {
 }
 
 
-void delete_room(char* roomName) {
-  int roomIndex = -1;
+int search_room_name(char * room_name){
+  copystring(room_name, room_name, strlen(room_name));
 
-  // Procura pelo índice da sala com o nome fornecido
+  printf("Searching for: %s\n", room_name);
+
   for (int i = 0; i < numRooms; i++) {
-    if (strcmp(chatRooms[i].name, roomName) == 0) {
-      roomIndex = i;
-      break;
+    if (compare(chatRooms[i].name, room_name) == 0) {
+      return i;
     }
   }
+  return -1;
+}
+
+
+
+void delete_room(int socket, char* roomName) {
+  
+  int roomIndex = search_room_name(roomName);
 
   // Verifica se a sala foi encontrada
   if (roomIndex == -1) {
-    printf("Sala '%s' não encontrada.\n", roomName);
+    char msg[MAX_MSG_SIZE];
+    snprintf(msg, sizeof(msg), "Sala '%s' não encontrada.\n", roomName);
+    server_response(socket, msg);
     return;
   }
 
@@ -113,9 +146,43 @@ void delete_room(char* roomName) {
 
   numRooms--;
 
+  char msg2[MAX_MSG_SIZE];
+  snprintf(msg2, sizeof(msg2), "Sala '%s' removida com sucesso.\n", roomName);
+  server_response(socket, msg2);
+}
+
+int join_room(int socket, char *room_name){
+
+  int room_index = search_room_name(room_name);
+  if (room_index == -1){
+    // Sala não existe.
+      printf("Room index: %d\n", room_index);
+      server_response(socket, "Sala selecionada não existe.\n");
+      return 0;
+  }
+
+  int result_search = search_client_in_room(socket);
+  if (result_search >= 0){
+    server_response(socket, "Usuario está conectado em outra sala.\n");
+    return 0;
+  }
+
+  ChatRoom *room = &chatRooms[room_index];
+
+  if(room->numClients >= MAX_CLIENTS_PER_ROOM){
+    // Sala cheia sem espaço.
+    server_response(socket, "Sala cheia.\n");
+    return 0;
+  }
+
+  // Cliente adicionado.
+  room->clients[room->numClients] = socket;
+  room->numClients++;
   char msg[MAX_MSG_SIZE];
-  snprintf(msg, sizeof(msg), "Sala '%s' removida com sucesso.\n", newRoom.name);
+  snprintf(msg, sizeof(msg), "Entrou na sala %s.\n", room->name);
   server_response(socket, msg);
+  return 1;
+
 }
 
 void list_rooms(int client_fd) {
@@ -232,10 +299,14 @@ int execute_command(int i, char *input) {
     printf("%s\n", chatRooms[numRooms-1].name);
   } else if (strncmp(input, "/list", 5) == 0) {
     list_rooms(i);
+  } else if (strncmp(input, "/join", 5) == 0){
+    char roomName[MAX_ROOM_NAME_LENGTH];
+    sscanf(input, "/join %[^\n]", roomName);
+    join_room(i, roomName);
   } else if (strncmp(input, "/delete", 7) == 0) {
     char roomName[MAX_ROOM_NAME_LENGTH];
     sscanf(input, "/delete %[^\n]", roomName);
-    delete_room(roomName);
+    delete_room(i, roomName);
   } else if (strncmp(input, "/clear", 6) == 0) {
     system(CLEAR_COMMAND);
   } else {
