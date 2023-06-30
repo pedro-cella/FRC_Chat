@@ -22,6 +22,7 @@ typedef struct {
   int clients[MAX_CLIENTS_PER_ROOM];
   int numClients;
   int roomID;  // Identificador da sala
+  int admUser;
 } ChatRoom;
 
 ChatRoom chatRooms[MAX_ROOMS];
@@ -29,7 +30,6 @@ int numRooms = 0;
 int idGenerator = 0;
 
 int server_response(int socket, char* msg) {
-
     if (socket == 0){
         printf("%s", msg);
     } else {
@@ -60,6 +60,7 @@ void create_room(int socket, char* roomName) {
   }
 
   // Verificar se o nome da sala já está em uso
+  // TODO: Fix essa função, não esta detectando o nome igual quando o nome é enviado por uma conexao socket.
   for (int i = 0; i < numRooms; i++) {
     if (strcmp(chatRooms[i].name, roomName) == 0) {
       printf("Já existe uma sala com esse nome.\n");
@@ -70,31 +71,22 @@ void create_room(int socket, char* roomName) {
   // Criar a nova sala
   ChatRoom newRoom;  // Declara uma variável do tipo ChatRoom para representar a
                      // nova sala
-  printf("CreateROOm: %s\n", roomName);
   // strcpy(newRoom->name, roomName);  // Copia o nome fornecido para o campo 'name' da nova sala
-
-  copystring(newRoom.name, roomName, strlen(roomName));
-  for(int i =0; newRoom.name[i]; i++){
-    printf("%d\n", newRoom.name[i]);
-  }
-
-
   // Inicializa o número de clientes da nova sala como
-  newRoom.numClients = 0;  // 0, já que não há clientes conectados ainda
-
+  copystring(newRoom.name, roomName, strlen(roomName));
+  newRoom.numClients = 1;  // 0, já que não há clientes conectados ainda
   newRoom.roomID = idGenerator++;
+  newRoom.admUser = i;
 
   // Adiciona a nova sala ao array de salas
   chatRooms[numRooms] = newRoom;  // 'chatRooms' na posição 'numRooms'
-
   numRooms++;  // Incrementa o contador de salas para refletir a adição da nova
                // sala
+
   char msg[MAX_MSG_SIZE];
-  snprintf(msg, sizeof(msg), "Sala '%s' criada com sucesso.\n",
-               newRoom.name);
+  snprintf(msg, sizeof(msg), "Sala '%s' criada com sucesso.\n", newRoom.name);
   server_response(socket, msg);
 }
-
 
 
 void delete_room(char* roomName) {
@@ -121,7 +113,9 @@ void delete_room(char* roomName) {
 
   numRooms--;
 
-  printf("Sala '%s' removida com sucesso.\n", roomName);
+  char msg[MAX_MSG_SIZE];
+  snprintf(msg, sizeof(msg), "Sala '%s' removida com sucesso.\n", newRoom.name);
+  server_response(socket, msg);
 }
 
 void list_rooms(int client_fd) {
@@ -131,23 +125,11 @@ void list_rooms(int client_fd) {
     server_response(client_fd, "Salas disponíveis:\n");
     for (int i = 0; i < numRooms; i++) {
       char roomInfo[MAX_MSG_SIZE];
-      snprintf(roomInfo, sizeof(roomInfo), "%d. %s (%d/%d participantes)\n",
-               i + 1, chatRooms[i].name, chatRooms[i].numClients,
-               MAX_CLIENTS_PER_ROOM);
+      snprintf(roomInfo, sizeof(roomInfo), "%d. %s (%d/%d participantes)\n", i + 1, chatRooms[i].name, chatRooms[i].numClients, MAX_CLIENTS_PER_ROOM);
       server_response(client_fd, roomInfo);
     }
   }
 }
-
-// void envia_msg(int sender_fd) {
-//     for (j = 0; j <= fdmax; j++) {
-//         if (FD_ISSET(j, &master)) {
-//             if ((j != sender_fd) && (j != sd)) {
-//                 send(j, buf, nbytes, 0);
-//             }
-//         }
-//     }
-// }
 
 void envia_msg(int sender_fd, int roomID) {
   for (int i = 0; i < chatRooms[roomID].numClients; i++) {
@@ -303,7 +285,6 @@ int main(int argc, char* argv[]) {
   for (;;) {
     read_fds = master;
     select(fdmax + 1, &read_fds, NULL, NULL, NULL);
-
     for (i = 0; i <= fdmax; i++) {
       if (FD_ISSET(i, &read_fds)) {
         if (i == sd) {
