@@ -95,48 +95,6 @@ int find_client_room(int socket) {
   return -1; // Cliente não está em nenhuma sala
 }
 
-
-//TODO - Ao criar a sala ele engole o último caractere do nome
-void create_room(int socket, char* roomName) {
-  // Verificar se o número máximo de salas já foi alcançado
-  if (numRooms >= MAX_ROOMS) {
-    server_response(socket, "Limite máximo de salas alcançado.\n");
-    return;
-  }
-
-  // Verificar se o nome da sala é muito longo
-  if (strlen(roomName) >= MAX_ROOM_NAME_LENGTH) {
-    server_response(socket, "O nome da sala é muito longo.\n");
-    return;
-  }
-
-  // Verificar se o nome da sala já está em uso
-  for (int i = 0; i < numRooms; i++) {
-    if (strncmp(chatRooms[i].name, roomName, strlen(chatRooms[i].name)) == 0) {
-      server_response(socket, "Já existe uma sala com esse nome.\n");
-      return;
-    }
-  }
-
-  // Criar a nova sala
-  ChatRoom newRoom;  // Declara uma variável do tipo ChatRoom para representar a
-                     // nova sala
-  // strcpy(newRoom->name, roomName);  // Copia o nome fornecido para o campo 'name' da nova sala
-  // Inicializa o número de clientes da nova sala como
-  copystring(newRoom.name, roomName, strlen(roomName));
-  newRoom.numClients = 0;  // 0, já que não há clientes conectados ainda
-  newRoom.roomID = idGenerator++;
-  newRoom.admUser = i;//! Trocar para vetor.
-  // Adiciona a nova sala ao array de salas
-  chatRooms[numRooms] = newRoom;  // 'chatRooms' na posição 'numRooms'
-  numRooms++;  // Incrementa o contador de salas para refletir a adição da nova
-               // sala
-
-  char msg[MAX_MSG_SIZE];
-  snprintf(msg, sizeof(msg), "Sala '%s' criada com sucesso.\n", newRoom.name);
-  server_response(socket, msg);
-}
-
 int search_room_name(char * room_name){
   copystring(room_name, room_name, strlen(room_name));
 
@@ -150,26 +108,8 @@ int search_room_name(char * room_name){
   return -1;
 }
 
-int delete_room(int socket, char* roomName) {
 
-  int roomIndex = search_room_name(roomName);
-  if (roomIndex == -1){
-    // Sala não existe.
-      printf("Room index: %d\n", roomIndex);
-      server_response(socket, "Sala selecionada não existe.\n");
-      return 0;
-  }
-
-  // Remove a sala do array de salas
-  for (int i = roomIndex; i < numRooms - 1; i++) {
-    chatRooms[i] = chatRooms[i + 1];
-  }
-  numRooms--;
-
-  char msg[MAX_MSG_SIZE];
-  snprintf(msg, sizeof(msg) + 30, "Sala '%s' removida com sucesso.\n", roomName);
-  server_response(socket, msg);
-}
+// -----------------------------------------------------------------
 
 int leave_room(int socket) {
   int roomIndex = find_client_room(socket);
@@ -200,6 +140,7 @@ int leave_room(int socket) {
 }
 
 int join_room(int socket, char *room_name){
+  printf("sdkjflsdkfj");
 
   printf("join_room: %s\n", room_name);
 
@@ -239,6 +180,75 @@ int join_room(int socket, char *room_name){
   server_response(socket, msg);
   return 1;
 }
+
+//TODO - Ao criar a sala ele engole o último caractere do nome
+int create_room(int socket, char* roomName) {
+  // Verificar se o número máximo de salas já foi alcançado
+  if (numRooms >= MAX_ROOMS) {
+    server_response(socket, "Limite máximo de salas alcançado.\n");
+    return 0;
+  }
+
+  // Verificar se o nome da sala é muito longo
+  if (strlen(roomName) >= MAX_ROOM_NAME_LENGTH) {
+    server_response(socket, "O nome da sala é muito longo.\n");
+    return 0;
+  }
+
+  // Verificar se o nome da sala já está em uso
+  for (int i = 0; i < numRooms; i++) {
+    if (strncmp(chatRooms[i].name, roomName, strlen(chatRooms[i].name)) == 0) {
+      server_response(socket, "Já existe uma sala com esse nome.\n");
+      return 0;
+    }
+  }
+
+
+  // Criar a nova sala
+  ChatRoom newRoom;  // Declara uma variável do tipo ChatRoom para representar a
+                     // nova sala
+  // strcpy(newRoom->name, roomName);  // Copia o nome fornecido para o campo 'name' da nova sala
+  // Inicializa o número de clientes da nova sala como
+  copystring(newRoom.name, roomName, strlen(roomName));
+  newRoom.numClients = 0;  // 0, já que não há clientes conectados ainda
+  newRoom.roomID = idGenerator++;
+  newRoom.admUser = i;//! Trocar para vetor.
+  // Adiciona a nova sala ao array de salas
+  chatRooms[numRooms] = newRoom;  // 'chatRooms' na posição 'numRooms'
+  numRooms++;  // Incrementa o contador de salas para refletir a adição da nova
+               // sala
+
+  char msg[MAX_MSG_SIZE];
+  snprintf(msg, sizeof(msg), "Sala '%s' criada com sucesso.\n", newRoom.name);
+  server_response(socket, msg);
+  join_room(socket, roomName);
+
+  return 1;
+}
+
+
+
+int delete_room(int socket, char* roomName) {
+
+  int roomIndex = search_room_name(roomName);
+  if (roomIndex == -1){
+    // Sala não existe.
+      printf("Room index: %d\n", roomIndex);
+      server_response(socket, "Sala selecionada não existe.\n");
+      return 0;
+  }
+
+  // Remove a sala do array de salas
+  for (int i = roomIndex; i < numRooms - 1; i++) {
+    chatRooms[i] = chatRooms[i + 1];
+  }
+  numRooms--;
+
+  char msg[MAX_MSG_SIZE];
+  snprintf(msg, sizeof(msg) + 30, "Sala '%s' removida com sucesso.\n", roomName);
+  server_response(socket, msg);
+}
+
 
 // int change_room(int socket, char* new_room_name) {
 //   int currentRoomIndex = find_client_room(socket);
