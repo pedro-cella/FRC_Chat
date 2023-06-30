@@ -108,6 +108,21 @@ int get_room_id_by_name(char * room_name){
   return -1;
 }
 
+int is_admin(int socket){
+  int room_id = get_room_id_by_socket(socket);
+
+  if (room_id == -1) {
+    server_response(socket, "Você não está em nenhuma sala.\n");
+    return 0;
+  }
+
+  if(chatRooms[room_id].admUser == socket) {
+    return 1;
+  }
+
+  return -1;
+}
+
 
 // -----------------------------------------------------------------
 
@@ -141,8 +156,6 @@ int leave_room(int socket) {
 }
 
 int join_room(int socket, char *room_name){
-  printf("sdkjflsdkfj");
-
   printf("join_room: %s\n", room_name);
 
   int room_index = get_room_id_by_name(room_name);
@@ -230,6 +243,13 @@ int create_room(int socket, char* roomName) {
 
 int delete_room(int socket, char* roomName) {
 
+  if(is_admin(socket) == -1) {
+    server_response(socket, "Você não é admin.\n");
+    server_response(socket, "Contacte o admin dor server para receber assistência.\n");
+
+    return 0;
+  }
+
   int roomIndex = get_room_id_by_name(roomName);
   if (roomIndex == -1){
     // Sala não existe.
@@ -273,7 +293,6 @@ int show_info(int socket) {
   server_response(socket, "/join <índice_sala>                                     - Entra em uma sala existente\n");
   server_response(socket, "/list                                                   - Lista as salas disponíveis\n");
   server_response(socket, "/users <índice_sala>                                    - Lista os participantes de uma sala\n");
-  server_response(socket, "/room <índice_sala>                                     - Visualiza participantes de uma sala\n");
   server_response(socket, "/remove_room <índice_sala>                              - Remove uma sala existente\n");
   server_response(socket, "/remove_participant <índice_sala> <índice_participante> - Remove um participante de uma sala\n");
   server_response(socket, "/clean                                                  - Limpa o terminal\n");
@@ -284,7 +303,7 @@ int show_info(int socket) {
 
   if (room_id == -1) {
     server_response(socket, "room: <empty>\n");
-    server_response(socket, "\njoin in a room to chat with someone");
+    server_response(socket, "\nentre em uma sala para falar com alguem :D");
   } else {
     char msg[MAX_MSG_SIZE];
     snprintf(msg, sizeof(msg), "room name: %s\n", chatRooms[room_id].name);
@@ -473,6 +492,9 @@ int execute_command(int i, char *input) {
   else if (strncmp(input, "/info", 5) == 0) {
     show_info(i);
   } 
+  // else if (strncmp(input, "/remove", 5) == 0) {
+  //   show_info(i);
+  // } 
   else if (strncmp(input, "/join", 5) == 0){
     char roomName[MAX_ROOM_NAME_LENGTH];
     sscanf(input, "/join %[^\n]", roomName);
