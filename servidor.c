@@ -64,6 +64,7 @@ int compare(char *str1, char *str2) {
     str1++;
     str2++;
   }
+  printf("*str1 - *str2 = %d\n", *str1 - *str2);
   return *str1 - *str2;
 
 }
@@ -136,7 +137,6 @@ void create_room(int socket, char* roomName) {
   server_response(socket, msg);
 }
 
-
 int search_room_name(char * room_name){
   copystring(room_name, room_name, strlen(room_name));
 
@@ -149,8 +149,6 @@ int search_room_name(char * room_name){
   }
   return -1;
 }
-
-
 
 int delete_room(int socket, char* roomName) {
 
@@ -174,6 +172,8 @@ int delete_room(int socket, char* roomName) {
 }
 
 int join_room(int socket, char *room_name){
+
+  printf("join_room: %s\n", room_name);
 
   int room_index = search_room_name(room_name);
   if (room_index == -1){
@@ -211,6 +211,87 @@ int join_room(int socket, char *room_name){
 
 }
 
+int leave_room(int socket) {
+  int roomIndex = find_client_room(socket);
+  
+  if (roomIndex == -1) {
+    // Cliente não está em nenhuma sala
+    server_response(socket, "Você não está em nenhuma sala.\n");
+    return 0;
+  }
+  
+  ChatRoom* room = &chatRooms[roomIndex];
+  
+  for (int i = 0; i < room->numClients; i++) {
+    if (room->clients[i] == socket) {
+      // Remove o cliente da sala
+      for (int j = i; j < room->numClients - 1; j++) {
+        room->clients[j] = room->clients[j + 1];
+      }
+      room->numClients--;
+      break;
+    }
+  }
+  
+  // Envia mensagem de confirmação ao cliente
+  server_response(socket, "Você saiu da sala.\n");
+  
+  return 1;
+}
+
+// int change_room(int socket, char* new_room_name) {
+//   int currentRoomIndex = find_client_room(socket);
+//   int newRoomIndex = search_room_name(new_room_name);
+//   char roomName[MAX_ROOM_NAME_LENGTH];
+//   copystring(roomName, new_room_name, strlen(new_room_name));
+
+//   printf("ROOMNAME: %s\n", roomName);
+
+//   if (currentRoomIndex == -1) {
+//     // Cliente não está em nenhuma sala
+//     server_response(socket, "Você não está em nenhuma sala.\n");
+//     return 0;
+//   }
+
+//   if (newRoomIndex == -1) {
+//     // A sala não existe
+//     server_response(socket, "Essa sala não existe.\n");
+//     return 0;
+//   }
+
+//   leave_room(socket);
+  
+//   if (newRoomIndex != -1) {
+//     join_room(socket, new_room_name);
+//   } else {
+//     join_room(socket, roomName);
+//   }
+  
+//   return 1;
+// }
+
+
+int change_room(int socket, char* new_room_name) {
+  int current_room_index = find_client_room(socket);
+  if (current_room_index == -1) {
+    // Cliente não está em nenhuma sala
+    server_response(socket, "Você não está em nenhuma sala.\n");
+    return 0;
+  }
+  
+  leave_room(socket);
+  
+  int new_room_index = search_room_name(new_room_name);
+  if (new_room_index != -1) {
+    join_room(socket, new_room_name);
+  } else {
+    join_room(socket, chatRooms[current_room_index].name);
+  }
+  
+  return 1;
+}
+
+
 void list_rooms(int client_fd) {
   if (numRooms == 0) {
     server_response(client_fd, "Não há salas disponíveis\n");
@@ -230,6 +311,16 @@ void envia_msg(int sender_fd, int room_index) {
     int client_fd = chatRooms[room_index].clients[i];
     if (client_fd != sender_fd) {
       send(client_fd, buf, nbytes, 0);
+    }
+  }
+}
+
+void send_message(int sender_fd, int room_index, char* message) {
+  
+  for (int i = 0; i < chatRooms[room_index].numClients; i++) {
+    int client_fd = chatRooms[room_index].clients[i];
+    if (client_fd != sender_fd) {
+      send(client_fd, message, strlen(message), 0);
     }
   }
 }
@@ -334,13 +425,21 @@ int execute_command(int i, char *input) {
     char roomName[MAX_ROOM_NAME_LENGTH];
     sscanf(input, "/delete %[^\n]", roomName);
     delete_room(i, roomName);
+  } else if (strncmp(input, "/change", 7) == 0) {
+    char roomName[MAX_ROOM_NAME_LENGTH];
+    sscanf(input, "/change %[^\n]", roomName);
+    change_room(i, roomName);
   } else if (strncmp(input, "/clear", 6) == 0) {
     system(CLEAR_COMMAND);
-  } else {
+  } else if(strncmp(input, "/leave", 6) == 0){
+    leave_room(i);
+  }else {
     // Teste
-    int sala = search_client_in_room(i);
-    if(sala != -1){
-      envia_msg(i, sala);
+    int roomIndex = find_client_room(i);
+    if(roomIndex != -1){
+      char message[MAX_MSG_SIZE];
+      snprintf(message, sizeof(message), "%s\n", input);
+      send_message(i, roomIndex, message);
     }else{
       printf("SOCKET %d: %s\n", i, input);
     }
