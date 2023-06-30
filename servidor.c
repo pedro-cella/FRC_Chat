@@ -22,14 +22,16 @@ typedef struct {
   int clients[MAX_CLIENTS_PER_ROOM];
   int numClients;
   int roomID;  // Identificador da sala
-  int admUser;
+  int admUser; // Trocar para um vetor de adm, fazer func de add adm.
 } ChatRoom;
 
 ChatRoom chatRooms[MAX_ROOMS];
 int numRooms = 0;
-int idGenerator = 0;
+int idGenerator = 0; // Verificar importancia dessa var.
 
 int server_response(int socket, char* msg) {
+  // printf("Len: %d; Str: %s\n", strlen(msg), msg);
+
     if (socket == 0){
         printf("%s", msg);
     } else {
@@ -43,8 +45,16 @@ char *copystring(char *restrict dest, char const *restrict source, size_t elemen
     for (d = dest; d + 1 < dest + elements; d++, source++)
         *d = *source;
     *d = '\0';
+
     return d;
+
 }
+
+// void copystring(char* dest, char* src, size_t elements) {
+//   size_t length = strlen(src);
+//   memcpy(dest, src, length);
+// }
+
 
 int compare(char *str1, char *str2) {
 
@@ -55,6 +65,7 @@ int compare(char *str1, char *str2) {
     str2++;
   }
   return *str1 - *str2;
+
 }
 
 int search_client_in_room(int socket){
@@ -73,13 +84,13 @@ int search_client_in_room(int socket){
 void create_room(int socket, char* roomName) {
   // Verificar se o número máximo de salas já foi alcançado
   if (numRooms >= MAX_ROOMS) {
-    printf("Limite máximo de salas alcançado.\n");
+    server_response(socket, "Limite máximo de salas alcançado.\n");
     return;
   }
 
   // Verificar se o nome da sala é muito longo
   if (strlen(roomName) >= MAX_ROOM_NAME_LENGTH) {
-    printf("O nome da sala é muito longo.\n");
+    server_response(socket, "O nome da sala é muito longo.\n");
     return;
   }
 
@@ -87,7 +98,7 @@ void create_room(int socket, char* roomName) {
   // TODO: Fix essa função, não esta detectando o nome igual quando o nome é enviado por uma conexao socket.
   for (int i = 0; i < numRooms; i++) {
     if (strcmp(chatRooms[i].name, roomName) == 0) {
-      printf("Já existe uma sala com esse nome.\n");
+      server_response(socket, "Já existe uma sala com esse nome.\n");
       return;
     }
   }
@@ -100,7 +111,7 @@ void create_room(int socket, char* roomName) {
   copystring(newRoom.name, roomName, strlen(roomName));
   newRoom.numClients = 0;  // 0, já que não há clientes conectados ainda
   newRoom.roomID = idGenerator++;
-  newRoom.admUser = i;
+  newRoom.admUser = i;//! Trocar para vetor.
   // Adiciona a nova sala ao array de salas
   chatRooms[numRooms] = newRoom;  // 'chatRooms' na posição 'numRooms'
   numRooms++;  // Incrementa o contador de salas para refletir a adição da nova
@@ -127,28 +138,25 @@ int search_room_name(char * room_name){
 
 
 
-void delete_room(int socket, char* roomName) {
-  
-  int roomIndex = search_room_name(roomName);
+int delete_room(int socket, char* roomName) {
 
-  // Verifica se a sala foi encontrada
-  if (roomIndex == -1) {
-    char msg[MAX_MSG_SIZE];
-    snprintf(msg, sizeof(msg), "Sala '%s' não encontrada.\n", roomName);
-    server_response(socket, msg);
-    return;
+  int roomIndex = search_room_name(roomName);
+  if (roomIndex == -1){
+    // Sala não existe.
+      printf("Room index: %d\n", roomIndex);
+      server_response(socket, "Sala selecionada não existe.\n");
+      return 0;
   }
 
   // Remove a sala do array de salas
   for (int i = roomIndex; i < numRooms - 1; i++) {
     chatRooms[i] = chatRooms[i + 1];
   }
-
   numRooms--;
 
-  char msg2[MAX_MSG_SIZE];
-  snprintf(msg2, sizeof(msg2), "Sala '%s' removida com sucesso.\n", roomName);
-  server_response(socket, msg2);
+  char msg[MAX_MSG_SIZE];
+  snprintf(msg, sizeof(msg) + 30, "Sala '%s' removida com sucesso.\n", roomName);
+  server_response(socket, msg);
 }
 
 int join_room(int socket, char *room_name){
@@ -161,6 +169,8 @@ int join_room(int socket, char *room_name){
       return 0;
   }
 
+
+  //? Possibilidade de troca de sala.
   int result_search = search_client_in_room(socket);
   if (result_search >= 0){
     server_response(socket, "Usuario está conectado em outra sala.\n");
@@ -197,10 +207,11 @@ void list_rooms(int client_fd) {
     }
   }
 }
-
-void envia_msg(int sender_fd, int roomID) {
-  for (int i = 0; i < chatRooms[roomID].numClients; i++) {
-    int client_fd = chatRooms[roomID].clients[i];
+//! Quase funcionando. 
+void envia_msg(int sender_fd, int room_index) {
+  
+  for (int i = 0; i < chatRooms[room_index].numClients; i++) {
+    int client_fd = chatRooms[room_index].clients[i];
     if (client_fd != sender_fd) {
       send(client_fd, buf, nbytes, 0);
     }
@@ -246,50 +257,50 @@ void list_connections() {
   }
 }
 
-void send_room_list(int client_fd) {
-  char roomList[MAX_ROOMS * MAX_ROOM_NAME_LENGTH];
-  memset(roomList, 0, sizeof(roomList));
+// void send_room_list(int client_fd) {
+//   char roomList[MAX_ROOMS * MAX_ROOM_NAME_LENGTH];
+//   memset(roomList, 0, sizeof(roomList));
 
-  // Concatena as informações das salas na string roomList, separadas por quebra
-  // de linha
-  for (int i = 0; i < numRooms; i++) {
-    char roomInfo[512];  // Tamanho aumentado para acomodar a string formatada
-    int roomInfoLength = snprintf(
-        roomInfo, sizeof(roomInfo), "%d. %s (%d/%d participantes)\n", i + 1,
-        chatRooms[i].name, chatRooms[i].numClients, MAX_CLIENTS_PER_ROOM);
-    if (roomInfoLength < 0 || roomInfoLength >= sizeof(roomInfo)) {
-      printf("Erro ao formatar informações da sala %d\n", i + 1);
-      continue;
-    }
-    strcat(roomList, roomInfo);
-  }
+//   // Concatena as informações das salas na string roomList, separadas por quebra
+//   // de linha
+//   for (int i = 0; i < numRooms; i++) {
+//     char roomInfo[512];  // Tamanho aumentado para acomodar a string formatada
+//     int roomInfoLength = snprintf(
+//         roomInfo, sizeof(roomInfo), "%d. %s (%d/%d participantes)\n", i + 1,
+//         chatRooms[i].name, chatRooms[i].numClients, MAX_CLIENTS_PER_ROOM);
+//     if (roomInfoLength < 0 || roomInfoLength >= sizeof(roomInfo)) {
+//       printf("Erro ao formatar informações da sala %d\n", i + 1);
+//       continue;
+//     }
+//     strcat(roomList, roomInfo);
+//   }
 
-  send(client_fd, roomList, strlen(roomList), 0);
-}
+//   send(client_fd, roomList, strlen(roomList), 0);
+// }
 
-int get_room_id(int client_fd) {
-  for (int i = 0; i < numRooms; i++) {
-    for (int j = 0; j < chatRooms[i].numClients; j++) {
-      if (chatRooms[i].clients[j] == client_fd) {
-        return chatRooms[i].roomID;
-      }
-    }
-  }
-  return -1;  // Cliente não está em nenhuma sala
-}
+// int get_room_id(int client_fd) {
+//   for (int i = 0; i < numRooms; i++) {
+//     for (int j = 0; j < chatRooms[i].numClients; j++) {
+//       if (chatRooms[i].clients[j] == client_fd) {
+//         return chatRooms[i].roomID;
+//       }
+//     }
+//   }
+//   return -1;  // Cliente não está em nenhuma sala
+// }
 
-int is_online(int i) {
-  // Processa o input do cliente
-  int response = server_response(i, "");
-  printf("R: %d\n", response);
-  if (response == -1) {
-    // Conexão fechada pelo cliente
-    close(i);
-    FD_CLR(i, &read_fds);
-    return 0;
-  }
-  return 1;
-}
+// int is_online(int i) {
+//   // Processa o input do cliente
+//   int response = server_response(i, "");
+//   printf("R: %d\n", response);
+//   if (response == -1) {
+//     // Conexão fechada pelo cliente
+//     close(i);
+//     FD_CLR(i, &read_fds);
+//     return 0;
+//   }
+//   return 1;
+// }
 
 int execute_command(int i, char *input) {
   if (strncmp(input, "/create", 7) == 0) {
