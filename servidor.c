@@ -246,7 +246,6 @@ int delete_room(int socket, char* roomName) {
   if(is_admin(socket) == -1) {
     server_response(socket, "Você não é admin.\n");
     server_response(socket, "Contacte o admin dor server para receber assistência.\n");
-
     return 0;
   }
 
@@ -286,10 +285,48 @@ int list_rooms(int client_fd) {
   return 1;
 }
 
+int remove_user(int socket, int user_id) {
+
+  if(is_admin(socket) == -1) {
+    server_response(socket, "Você não é admin.\n");
+    server_response(socket, "Contacte o admin dor server para receber assistência.\n");
+    return 0;
+  }
+
+  int adm_room_id = get_room_id_by_socket(socket);
+  int user_room_id = get_room_id_by_socket(user_id);
+  
+  if (socket == user_id) {
+    server_response(socket, "Você não pode se remover.\n");
+    server_response(socket, "Tente deletar a sala.\n");
+    return 0;
+  } 
+
+  if (user_room_id == -1) {
+    server_response(socket, "Esse usuário não existe.\n");
+    return 0;
+  }
+
+  if (adm_room_id != user_room_id) {
+    server_response(socket, "Esse usuário não está nesta sala.\n");
+    return 0;
+  } 
+
+  leave_room(user_id);
+
+  char msg[MAX_MSG_SIZE];
+  snprintf(msg, sizeof(msg), "Usuário '%d' removida com sucesso.\n", user_id);
+  server_response(socket, msg);
+  server_response(user_id, "Você foi removida.\n");
+
+  return 1;
+}
+
 int show_info(int socket) {
   server_response(socket, "----------------\n");
   server_response(socket, "Comandos disponíveis:\n");
   server_response(socket, "/create <nome_sala>                                     - Cria uma nova sala\n");
+  server_response(socket, "/leave <nome_sala>                                      - Sair de uma sala\n");
   server_response(socket, "/join <índice_sala>                                     - Entra em uma sala existente\n");
   server_response(socket, "/list                                                   - Lista as salas disponíveis\n");
   server_response(socket, "/users <índice_sala>                                    - Lista os participantes de uma sala\n");
@@ -492,9 +529,16 @@ int execute_command(int i, char *input) {
   else if (strncmp(input, "/info", 5) == 0) {
     show_info(i);
   } 
-  // else if (strncmp(input, "/remove", 5) == 0) {
-  //   show_info(i);
+  // else if (strncmp(input, "/list_user", 12) == 0) {
+  //   int user_id;
+  //   sscanf(input, "/remove_user %[^\n]", user_id);
+  //   delete_user(i, atoi(user_id));
   // } 
+  else if (strncmp(input, "/remove_user", 12) == 0) {
+    char user_id[MAX_CLIENT_ID_LENGTH];
+    sscanf(input, "/remove_user %[^\n]", user_id);
+    remove_user(i, atoi(user_id));
+  } 
   else if (strncmp(input, "/join", 5) == 0){
     char roomName[MAX_ROOM_NAME_LENGTH];
     sscanf(input, "/join %[^\n]", roomName);
