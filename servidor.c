@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 #include "./constants.h"
 
@@ -18,11 +19,18 @@ socklen_t addrlen;
 char buf[MAX_MSG_SIZE];
 
 typedef struct {
+  char nickname[MAX_ROOM_NAME_LENGTH];
+  int user_id;
+} User;
+
+typedef struct {
   char name[MAX_ROOM_NAME_LENGTH];
-  int clients[MAX_CLIENTS_PER_ROOM];
+  User clients[MAX_CLIENTS_PER_ROOM];
+  // int clients[MAX_CLIENTS_PER_ROOM];
   int numClients;
+  int numAdm;
   int roomID;  // Identificador da sala
-  int admUser; // Trocar para um vetor de adm, fazer func de add adm.
+  int admUser[MAX_ADM_PER_ROOM]; // Trocar para um vetor de adm, fazer func de add adm.
 } ChatRoom;
 
 ChatRoom chatRooms[MAX_ROOMS];
@@ -87,8 +95,20 @@ int compare(char *str1, char *str2) {
 int get_room_id_by_socket(int socket) {
   for (int i = 0; i < numRooms; i++) {
     for (int j = 0; j < chatRooms[i].numClients; j++) {
-      if (chatRooms[i].clients[j] == socket) {
+      if (chatRooms[i].clients[j].user_id == socket) {
         return i; // Retorna o número da sala em que o cliente está
+      }
+    }
+  }
+  
+  return -1; // Cliente não está em nenhuma sala
+}
+
+int get_user_by_socket(int socket) {
+  for (int i = 0; i < numRooms; i++) {
+    for (int j = 0; j < chatRooms[i].numClients; j++) {
+      if (chatRooms[i].clients[j].user_id == socket) {
+        return j; // Retorna o número da sala em que o cliente está
       }
     }
   }
@@ -110,14 +130,17 @@ int get_room_id_by_name(char * room_name){
 
 int is_admin(int socket){
   int room_id = get_room_id_by_socket(socket);
+  int user_id = get_user_by_socket(socket);
 
   if (room_id == -1) {
-    server_response(socket, "Você não está em nenhuma sala.\n");
+    server_response(socket, "Usuário não encontrado.\n");
     return 0;
   }
 
-  if(chatRooms[room_id].admUser == socket) {
-    return 1;
+  for(int i = 0; i < chatRooms[room_id].numClients; i++) {
+    if(i == socket) {
+      return 1;
+    }
   }
 
   return -1;
@@ -139,7 +162,7 @@ int leave_room(int socket) {
   ChatRoom* room = &chatRooms[roomIndex];
   
   for (int i = 0; i < room->numClients; i++) {
-    if (room->clients[i] == socket) {
+    if (room->clients[i].user_id == socket) {
       // Remove o cliente da sala
       for (int j = i; j < room->numClients - 1; j++) {
         room->clients[j] = room->clients[j + 1];
@@ -187,7 +210,7 @@ int join_room(int socket, char *room_name){
   }
 
   // Cliente adicionado.
-  room->clients[room->numClients] = socket;
+  room->clients[room->numClients].user_id = socket;
   room->numClients++;
   char msg[MAX_MSG_SIZE];
   snprintf(msg, sizeof(msg), "Entrou na sala %s.\n", room->name);
@@ -226,8 +249,10 @@ int create_room(int socket, char* roomName) {
   // Inicializa o número de clientes da nova sala como
   copystring(newRoom.name, roomName, strlen(roomName));
   newRoom.numClients = 0;  // 0, já que não há clientes conectados ainda
+  newRoom.numAdm = 1;  
   newRoom.roomID = idGenerator++;
-  newRoom.admUser = i;//! Trocar para vetor.
+  newRoom.clients[0].user_id = i;//! Trocar para vetor.
+  newRoom.admUser[0] = i;
   // Adiciona a nova sala ao array de salas
   chatRooms[numRooms] = newRoom;  // 'chatRooms' na posição 'numRooms'
   numRooms++;  // Incrementa o contador de salas para refletir a adição da nova
@@ -297,8 +322,13 @@ int remove_user(int socket, int user_id) {
   int user_room_id = get_room_id_by_socket(user_id);
   
   if (socket == user_id) {
-    server_response(socket, "Você não pode se remover.\n");
-    server_response(socket, "Tente deletar a sala.\n");
+    leave_room(user_id);
+    char msg[MAX_MSG_SIZE]; 
+    snprintf(msg, sizeof(msg), "Usuário '%d' removida com sucesso.\n", user_id);
+
+    // if() validar se a pessoa realmente quer deletar a sala, verificar se é a unica adm
+    // delete_room(user_id, chatRooms[user_room_id].name);
+    // server_response(socket, "Sala deletada.\n");
     return 0;
   } 
 
@@ -349,9 +379,16 @@ int show_info(int socket) {
     server_response(socket, msg);
     snprintf(msg, sizeof(msg), "(%d/%d participantes)\n", chatRooms[room_id].numClients, MAX_CLIENTS_PER_ROOM);
     server_response(socket, msg);
+    snprintf(msg, sizeof(msg), "(%d/%d adms)\n", chatRooms[room_id].numAdm, MAX_ADM_PER_ROOM);
+    server_response(socket, msg);
+    server_response(socket, "adms id:");
+    for (int i = 0; i < chatRooms[room_id].numAdm; i++) { 
+      snprintf(msg, sizeof(msg), "%d", chatRooms[room_id].clients->user_id);
+      server_response(socket, msg);
+    }
   }
 
-  server_response(socket, "\n----------------\n");
+  server_response(socket, "\n\n----------------\n");
 
   return 1;
 }
@@ -415,7 +452,7 @@ int show_info(int socket) {
 void envia_msg(int sender_fd, int room_index) {
   
   for (int i = 0; i < chatRooms[room_index].numClients; i++) {
-    int client_fd = chatRooms[room_index].clients[i];
+    int client_fd = chatRooms[room_index].clients[i].user_id;
     if (client_fd != sender_fd) {
       send(client_fd, buf, nbytes, 0);
     }
@@ -425,7 +462,7 @@ void envia_msg(int sender_fd, int room_index) {
 void send_message(int sender_fd, int room_index, char* message) {
   
   for (int i = 0; i < chatRooms[room_index].numClients; i++) {
-    int client_fd = chatRooms[room_index].clients[i];
+    int client_fd = chatRooms[room_index].clients[i].user_id;
     if (client_fd != sender_fd) {
       send(client_fd, message, strlen(message), 0);
     }

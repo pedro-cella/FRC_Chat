@@ -8,6 +8,7 @@
 #define MAX_CLIENT_ID_LENGTH 256
 #define MAX_MSG_SIZE 500
 #define MAX_CLIENTS_PER_ROOM 4
+#define MAX_ADM_PER_ROOM 6
 #define CLEAR_COMMAND "clear"
 
 #endif
