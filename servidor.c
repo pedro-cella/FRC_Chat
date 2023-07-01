@@ -128,8 +128,7 @@ int get_room_id_by_name(char * room_name){
   return -1;
 }
 
-int is_admin(int socket){
-  int room_id = get_room_id_by_socket(socket);
+int is_admin(int socket, int room_id){
   int user_id = get_user_by_socket(socket);
 
   if (room_id == -1) {
@@ -268,13 +267,14 @@ int create_room(int socket, char* roomName) {
 
 int delete_room(int socket, char* roomName) {
 
-  if(is_admin(socket) == -1) {
+  int room_id = get_room_id_by_name(roomName);
+
+  if(is_admin(socket, room_id) == -1) {
     server_response(socket, "Você não é admin.\n");
     server_response(socket, "Contacte o admin dor server para receber assistência.\n");
     return 0;
   }
 
-  int room_id = get_room_id_by_name(roomName);
   if (room_id == -1){
     // Sala não existe.
       printf("Room index: %d\n", room_id);
@@ -284,8 +284,8 @@ int delete_room(int socket, char* roomName) {
 
   for(int i = 0; i < chatRooms[room_id].numClients; i++) {
     leave_room(chatRooms[room_id].clients[i].user_id);
-    server_response(chatRooms[room_id].clients[i].user_id, "Você foi removido");
-    server_response(chatRooms[room_id].clients[i].user_id, "Sala deletada!");
+    server_response(chatRooms[room_id].clients[i].user_id, "Você foi removido\n");
+    server_response(chatRooms[room_id].clients[i].user_id, "Sala deletada!\n");
   }
 
   // Remove a sala do array de salas
@@ -297,6 +297,56 @@ int delete_room(int socket, char* roomName) {
   char msg[MAX_MSG_SIZE];
   snprintf(msg, sizeof(msg), "Sala '%s' removida com sucesso.\n", roomName);
   server_response(socket, msg);
+
+  return 1;
+}
+
+int add_admin(int socket, int client_id, char* roomName) {
+
+  int room_id = get_room_id_by_name(roomName);
+
+  if (room_id == -1){
+    printf("Room index: %d\n", room_id);
+    server_response(socket, "Sala selecionada não existe.\n");
+    return 0;
+  }
+
+  if(is_admin(socket, room_id) == -1) {
+    server_response(socket, "Você não é admin.\n");
+    server_response(socket, "Contacte o admin dor server para receber assistência.\n");
+    return 0;
+  }
+
+  if(chatRooms[room_id].numAdm == MAX_ADM_PER_ROOM) {
+    server_response(socket, "Sala possivel o limite maximo de adms.\n");
+    return 0;
+  }
+
+  for(int i = 0; i < chatRooms[room_id].numAdm; i++) {
+    if(chatRooms[room_id].admUser[i] == client_id) {
+      server_response(socket, "Adm já adicionado.\n");
+      return 0;
+    } 
+  }
+
+  for(int i = 0; i < chatRooms[room_id].numClients; i++) {
+    if(chatRooms[room_id].admUser[i] == client_id) {
+      break;
+    } else {
+      if (i == chatRooms[room_id].numClients) server_response(socket, "Esse usuário não está no server.\n");
+      continue;
+    }
+    
+    return 0;
+  }
+
+  chatRooms[room_id].admUser[chatRooms[room_id].numAdm] = client_id;
+  chatRooms[room_id].numAdm++;
+
+  char msg[MAX_MSG_SIZE];
+  snprintf(msg, sizeof(msg), "Usuário '%d' adicionado com sucesso.\n", client_id);
+  server_response(socket, msg);
+  server_response(client_id, "Agora você é admin.\n");
 
   return 1;
 }
@@ -316,15 +366,36 @@ int list_rooms(int client_fd) {
   return 1;
 }
 
-int remove_user(int socket, int user_id) {
+int remove_admin(int socket, int user_id, char* roomName) {
+  int room_id = get_room_id_by_name(roomName);
 
-  if(is_admin(socket) == -1) {
+  for (int i = 0; i < chatRooms[room_id].numAdm; i++) {
+    if (chatRooms[room_id].admUser[i] == user_id) {
+      // Remove o cliente da sala
+      for (int j = i; j < chatRooms[room_id].numAdm - 1; j++) {
+        chatRooms[room_id].admUser[j] = chatRooms[room_id].admUser[j + 1];
+      }
+      break;
+    }
+  }
+
+  chatRooms[room_id].numAdm--;
+
+  
+  server_response(socket, "Menos 1 adm.\n");
+  return 1;
+}
+
+int remove_user(int socket, int user_id, char* roomName) {
+
+  int room_id = get_room_id_by_name(roomName);
+
+  if(is_admin(socket, room_id) == -1) {
     server_response(socket, "Você não é admin.\n");
     server_response(socket, "Contacte o admin dor server para receber assistência.\n");
     return 0;
   }
 
-  int adm_room_id = get_room_id_by_socket(socket);
   int user_room_id = get_room_id_by_socket(user_id);
   
   if (socket == user_id) {
@@ -343,12 +414,13 @@ int remove_user(int socket, int user_id) {
     return 0;
   }
 
-  if (adm_room_id != user_room_id) {
+  if (room_id != user_room_id) {
     server_response(socket, "Esse usuário não está nesta sala.\n");
     return 0;
   } 
 
   leave_room(user_id);
+  remove_admin(socket, user_id, roomName);
 
   char msg[MAX_MSG_SIZE];
   snprintf(msg, sizeof(msg), "Usuário '%d' removida com sucesso.\n", user_id);
@@ -388,13 +460,14 @@ int show_info(int socket) {
       snprintf(msg, sizeof(msg), " %d", chatRooms[room_id].clients[i].user_id);
       server_response(socket, msg);
     }
+    server_response(socket, "\n");
     snprintf(msg, sizeof(msg), "(%d/%d participantes)\n", chatRooms[room_id].numClients, MAX_CLIENTS_PER_ROOM);
     server_response(socket, msg);
     snprintf(msg, sizeof(msg), "(%d/%d adms)\n", chatRooms[room_id].numAdm, MAX_ADM_PER_ROOM);
     server_response(socket, msg);
   }
 
-  server_response(socket, "\n\n----------------\n");
+  server_response(socket, "\n----------------\n");
 
   return 1;
 }
@@ -579,8 +652,15 @@ int execute_command(int i, char *input) {
   // } 
   else if (strncmp(input, "/remove_user", 12) == 0) {
     char user_id[MAX_CLIENT_ID_LENGTH];
-    sscanf(input, "/remove_user %[^\n]", user_id);
-    remove_user(i, atoi(user_id));
+    char roomName[MAX_ROOM_NAME_LENGTH];
+    sscanf(input, "/remove_user %[^ ] %[^\n]", user_id, roomName);
+    remove_user(i, atoi(user_id), roomName);
+  } 
+  else if (strncmp(input, "/add_admin", 10) == 0) {
+    char user_id[MAX_CLIENT_ID_LENGTH];
+    char roomName[MAX_ROOM_NAME_LENGTH];
+    sscanf(input, "/add_admin %[^ ] %[^\n]", user_id, roomName);
+    add_admin(i, atoi(user_id), roomName);
   } 
   else if (strncmp(input, "/join", 5) == 0){
     char roomName[MAX_ROOM_NAME_LENGTH];
