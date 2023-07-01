@@ -138,7 +138,7 @@ int is_admin(int socket){
   }
 
   for(int i = 0; i < chatRooms[room_id].numClients; i++) {
-    if(i == socket) {
+    if(chatRooms[room_id].clients[i].user_id == socket) {
       return 1;
     }
   }
@@ -274,22 +274,28 @@ int delete_room(int socket, char* roomName) {
     return 0;
   }
 
-  int roomIndex = get_room_id_by_name(roomName);
-  if (roomIndex == -1){
+  int room_id = get_room_id_by_name(roomName);
+  if (room_id == -1){
     // Sala não existe.
-      printf("Room index: %d\n", roomIndex);
+      printf("Room index: %d\n", room_id);
       server_response(socket, "Sala selecionada não existe.\n");
       return 0;
   }
 
+  for(int i = 0; i < chatRooms[room_id].numClients; i++) {
+    leave_room(chatRooms[room_id].clients[i].user_id);
+    server_response(chatRooms[room_id].clients[i].user_id, "Você foi removido");
+    server_response(chatRooms[room_id].clients[i].user_id, "Sala deletada!");
+  }
+
   // Remove a sala do array de salas
-  for (int i = roomIndex; i < numRooms - 1; i++) {
+  for (int i = room_id; i < numRooms - 1; i++) {
     chatRooms[i] = chatRooms[i + 1];
   }
   numRooms--;
 
   char msg[MAX_MSG_SIZE];
-  snprintf(msg, sizeof(msg) + 30, "Sala '%s' removida com sucesso.\n", roomName);
+  snprintf(msg, sizeof(msg), "Sala '%s' removida com sucesso.\n", roomName);
   server_response(socket, msg);
 
   return 1;
@@ -377,15 +383,15 @@ int show_info(int socket) {
     server_response(socket, msg);
     snprintf(msg, sizeof(msg), "room id  : %d\n", room_id + 1);
     server_response(socket, msg);
+    server_response(socket, "adms id  :");
+    for (int i = 0; i < chatRooms[room_id].numAdm; i++) { 
+      snprintf(msg, sizeof(msg), " %d", chatRooms[room_id].clients[i].user_id);
+      server_response(socket, msg);
+    }
     snprintf(msg, sizeof(msg), "(%d/%d participantes)\n", chatRooms[room_id].numClients, MAX_CLIENTS_PER_ROOM);
     server_response(socket, msg);
     snprintf(msg, sizeof(msg), "(%d/%d adms)\n", chatRooms[room_id].numAdm, MAX_ADM_PER_ROOM);
     server_response(socket, msg);
-    server_response(socket, "adms id:");
-    for (int i = 0; i < chatRooms[room_id].numAdm; i++) { 
-      snprintf(msg, sizeof(msg), "%d", chatRooms[room_id].clients->user_id);
-      server_response(socket, msg);
-    }
   }
 
   server_response(socket, "\n\n----------------\n");
