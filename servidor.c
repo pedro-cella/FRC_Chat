@@ -560,6 +560,7 @@ int execute_command(int i, char *input) {
     int room_id = get_room_id_by_socket(i);
     if(room_id != -1){
       char message[MAX_MSG_SIZE];
+      memset(message, '\0', sizeof(message));
       snprintf(message, sizeof(message), "%s\n", input);
       send_message(i, room_id, message);
     }else{
@@ -589,6 +590,7 @@ void handle_command(int i) {
   }
 
   execute_command(i, input);
+  memset(input, '\0', sizeof(input));
 }
 
 int handle_new_connection() {
