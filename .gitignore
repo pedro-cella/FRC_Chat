@@ -1,3 +1,4 @@
-!chat.c
-chat*
+!*.c
+*chat
+server
 .vscode
