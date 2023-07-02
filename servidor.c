@@ -37,9 +37,8 @@ ChatRoom chatRooms[MAX_ROOMS];
 int numRooms = 0;
 int idGenerator = 0; // Verificar importancia dessa var.
 
+// Função para enviar uma resposta ao cliente ou imprimir no servidor
 int server_response(int socket, char* msg) {
-  // printf("Len: %d; Str: %s\n", strlen(msg), msg);
-
   if (socket == 0){
       printf("%s", msg);
   } else {
@@ -49,49 +48,25 @@ int server_response(int socket, char* msg) {
   return 1;
 }
 
+// Função para copiar uma string de origem para o destino
 char *copystring(char *restrict dest, char const *restrict source, size_t elements) {
     char *d;
     for (d = dest; d + 1 < dest + elements; d++, source++)
         *d = *source;
     *d = '\0';
-
     return d;
-
 }
 
-// void copystring(char* dest, char* src, size_t elements) {
-//   size_t length = strlen(src);
-//   memcpy(dest, src, length);
-// }
-
-
+// Função para comparar duas strings
 int compare(char *str1, char *str2) {
-
-  printf("Comparing s1: %s; s2: %s.\n", str1, str2);
-
   while (*str1 && *str1 == *str2) {
     str1++;
     str2++;
   }
-  printf("*str1 - *str2 = %d\n", *str1 - *str2);
   return *str1 - *str2;
-
 }
 
-// Apresentou problemas quando dois clientes de sockets diferentes tentaram entrar na mesma sala
-// int search_client_in_room(int socket){
-
-//   for (int i = 0; i < numRooms; i++){
-//     for (int j = 0; i < chatRooms[i].numClients; j++){
-//       if (chatRooms[i].clients[j] == socket){
-//         return i;
-//       }
-//     }
-//   }
-
-//   return -1;
-// }
-
+// Função para obter o ID da sala em que o cliente está com base no socket
 int get_room_id_by_socket(int socket) {
   for (int i = 0; i < numRooms; i++) {
     for (int j = 0; j < chatRooms[i].numClients; j++) {
@@ -118,7 +93,6 @@ int get_user_by_socket(int socket) {
 
 int get_room_id_by_name(char * room_name){
   copystring(room_name, room_name, strlen(room_name));
-  printf("Searching for: %s\n", room_name);
 
   for (int i = 0; i < numRooms; i++) {
     if (compare(chatRooms[i].name, room_name) == 0) {
@@ -141,14 +115,10 @@ int is_admin(int socket, int room_id){
       return 1;
     }
   }
-
   return -1;
 }
 
-
-// -----------------------------------------------------------------
-
-
+// Função para sair da sala
 int leave_room(int socket) {
   int roomIndex = get_room_id_by_socket(socket);
   
@@ -177,9 +147,8 @@ int leave_room(int socket) {
   return 1;
 }
 
+// Função para entrar em uma sala
 int join_room(int socket, char *room_name){
-  printf("join_room: %s\n", room_name);
-
   int room_index = get_room_id_by_name(room_name);
   if (room_index == -1){
     // Sala não existe.
@@ -203,7 +172,7 @@ int join_room(int socket, char *room_name){
     return 0;
   }
 
-  //? Possibilidade de troca de sala.
+  // Possibilidade de troca de sala.
   if (room_id >= 0){
     leave_room(socket);
   }
@@ -218,7 +187,7 @@ int join_room(int socket, char *room_name){
   return 1;
 }
 
-//TODO - Ao criar a sala ele engole o último caractere do nome
+// Função para criar uma nova sala
 int create_room(int socket, char* roomName) {
   // Verificar se o número máximo de salas já foi alcançado
   if (numRooms >= MAX_ROOMS) {
@@ -240,12 +209,8 @@ int create_room(int socket, char* roomName) {
     }
   }
 
-
   // Criar a nova sala
-  ChatRoom newRoom;  // Declara uma variável do tipo ChatRoom para representar a
-                     // nova sala
-  // strcpy(newRoom->name, roomName);  // Copia o nome fornecido para o campo 'name' da nova sala
-  // Inicializa o número de clientes da nova sala como
+  ChatRoom newRoom;
   copystring(newRoom.name, roomName, strlen(roomName));
   newRoom.numClients = 0;  // 0, já que não há clientes conectados ainda
   newRoom.numAdm = 1;  
@@ -265,6 +230,7 @@ int create_room(int socket, char* roomName) {
   return 1;
 }
 
+// Função para excluir uma sala
 int delete_room(int socket, char* roomName) {
 
   int room_id = get_room_id_by_name(roomName);
@@ -351,6 +317,7 @@ int add_admin(int socket, int client_id, char* roomName) {
   return 1;
 }
 
+// Função para listar as salas disponíveis
 int list_rooms(int client_fd) {
   if (numRooms == 0) {
     server_response(client_fd, "Não há salas disponíveis\n");
@@ -430,6 +397,7 @@ int remove_user(int socket, int user_id, char* roomName) {
   return 1;
 }
 
+// Função para exibir informações sobre o servidor e o usuário
 int show_info(int socket) {
   server_response(socket, "----------------\n");
   server_response(socket, "Comandos disponíveis:\n");
@@ -440,7 +408,6 @@ int show_info(int socket) {
   server_response(socket, "/users <índice_sala>                                    - Lista os participantes de uma sala\n");
   server_response(socket, "/remove_room <índice_sala>                              - Remove uma sala existente\n");
   server_response(socket, "/remove_participant <índice_sala> <índice_participante> - Remove um participante de uma sala\n");
-  server_response(socket, "/clean                                                  - Limpa o terminal\n");
   server_response(socket, "/info                                                   - Mostra informações da plataforma e do usuário\n");
   server_response(socket, "----------------\n\n");
 
@@ -472,62 +439,6 @@ int show_info(int socket) {
   return 1;
 }
 
-
-// int change_room(int socket, char* new_room_name) {
-//   int currentRoomIndex = get_room_id_by_socket(socket);
-//   int newRoomIndex = get_room_id_by_name(new_room_name);
-//   char roomName[MAX_ROOM_NAME_LENGTH];
-//   copystring(roomName, new_room_name, strlen(new_room_name));
-
-//   printf("ROOMNAME: %s\n", roomName);
-
-//   if (currentRoomIndex == -1) {
-//     // Cliente não está em nenhuma sala
-//     server_response(socket, "Você não está em nenhuma sala.\n");
-//     return 0;
-//   }
-
-//   if (newRoomIndex == -1) {
-//     // A sala não existe
-//     server_response(socket, "Essa sala não existe.\n");
-//     return 0;
-//   }
-
-//   leave_room(socket);
-  
-//   if (newRoomIndex != -1) {
-//     join_room(socket, new_room_name);
-//   } else {
-//     join_room(socket, roomName);
-//   }
-  
-//   return 1;
-// }
-
-
-// int change_room(int socket, char* new_room_name) {
-  // int current_room_index = get_room_id_by_socket(socket);
-  // if (current_room_index == -1) {
-  //   // Cliente não está em nenhuma sala
-  //   server_response(socket, "Você não está em nenhuma sala.\n");
-  //   return 0;
-  // }
-  
-
-
-  // leave_room(socket);
-  
-  // int new_room_index = get_room_id_by_name(new_room_name);
-  // if (new_room_index != -1) {
-  //   join_room(socket, new_room_name);
-  // } else {
-  //   join_room(socket, chatRooms[current_room_index].name);
-  // }
-  
-//   return 1;
-// }
-
-//! Quase funcionando. 
 void envia_msg(int sender_fd, int room_index) {
   
   for (int i = 0; i < chatRooms[room_index].numClients; i++) {
@@ -548,6 +459,7 @@ void send_message(int sender_fd, int room_index, char* message) {
   }
 }
 
+// Função para configurar o socket do servidor
 void setup_socket(char* ip, char* port) {
   FD_ZERO(&master);
   FD_ZERO(&read_fds);
@@ -569,6 +481,7 @@ void setup_socket(char* ip, char* port) {
   fdmax = sd;
 }
 
+// Função para listar as conexões ativas
 void list_connections() {
   printf("Conexões ativas:\n");
 
@@ -587,51 +500,7 @@ void list_connections() {
   }
 }
 
-// void send_room_list(int client_fd) {
-//   char roomList[MAX_ROOMS * MAX_ROOM_NAME_LENGTH];
-//   memset(roomList, 0, sizeof(roomList));
-
-//   // Concatena as informações das salas na string roomList, separadas por quebra
-//   // de linha
-//   for (int i = 0; i < numRooms; i++) {
-//     char roomInfo[512];  // Tamanho aumentado para acomodar a string formatada
-//     int roomInfoLength = snprintf(
-//         roomInfo, sizeof(roomInfo), "%d. %s (%d/%d participantes)\n", i + 1,
-//         chatRooms[i].name, chatRooms[i].numClients, MAX_CLIENTS_PER_ROOM);
-//     if (roomInfoLength < 0 || roomInfoLength >= sizeof(roomInfo)) {
-//       printf("Erro ao formatar informações da sala %d\n", i + 1);
-//       continue;
-//     }
-//     strcat(roomList, roomInfo);
-//   }
-
-//   send(client_fd, roomList, strlen(roomList), 0);
-// }
-
-// int get_room_id_by_socket(int client_fd) {
-//   for (int i = 0; i < numRooms; i++) {
-//     for (int j = 0; j < chatRooms[i].numClients; j++) {
-//       if (chatRooms[i].clients[j] == client_fd) {
-//         return chatRooms[i].roomID;
-//       }
-//     }
-//   }
-//   return -1;  // Cliente não está em nenhuma sala
-// }
-
-// int is_online(int i) {
-//   // Processa o input do cliente
-//   int response = server_response(i, "");
-//   printf("R: %d\n", response);
-//   if (response == -1) {
-//     // Conexão fechada pelo cliente
-//     close(i);
-//     FD_CLR(i, &read_fds);
-//     return 0;
-//   }
-//   return 1;
-// }
-
+// Função para executar um comando recebido
 int execute_command(int i, char *input) {
   if (strncmp(input, "/create", 7) == 0) {
     char roomName[MAX_ROOM_NAME_LENGTH];
@@ -645,11 +514,6 @@ int execute_command(int i, char *input) {
   else if (strncmp(input, "/info", 5) == 0) {
     show_info(i);
   } 
-  // else if (strncmp(input, "/list_user", 12) == 0) {
-  //   int user_id;
-  //   sscanf(input, "/remove_user %[^\n]", user_id);
-  //   delete_user(i, atoi(user_id));
-  // } 
   else if (strncmp(input, "/remove_user", 12) == 0) {
     char user_id[MAX_CLIENT_ID_LENGTH];
     char roomName[MAX_ROOM_NAME_LENGTH];
@@ -672,14 +536,10 @@ int execute_command(int i, char *input) {
     sscanf(input, "/delete %[^\n]", roomName);
     delete_room(i, roomName);
   }
-  else if (strncmp(input, "/clear", 6) == 0) {
-    system(CLEAR_COMMAND);
-  }
   else if(strncmp(input, "/leave", 6) == 0){
     leave_room(i);
   } 
   else {
-    // Teste
     int room_id = get_room_id_by_socket(i);
     if(room_id != -1){
       char message[MAX_MSG_SIZE];
@@ -692,6 +552,7 @@ int execute_command(int i, char *input) {
   }
 }
 
+// Função para lidar com um comando recebido
 void handle_command(int i) {
   char input[MAX_MSG_SIZE];
   size_t bytes_read;
@@ -716,6 +577,7 @@ void handle_command(int i) {
   memset(input, '\0', sizeof(input));
 }
 
+// Função para lidar com uma nova conexão
 int handle_new_connection() {
   newfd = accept(sd, (struct sockaddr*)&remoteaddr, &addrlen);
   FD_SET(newfd, &master);
@@ -723,6 +585,7 @@ int handle_new_connection() {
   return 1;
 }
 
+// Função principal
 int main(int argc, char* argv[]) {
   if (argc < 3) {
     printf("Digite IP e Porta para este servidor\n");
