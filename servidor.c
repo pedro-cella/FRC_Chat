@@ -19,8 +19,9 @@ socklen_t addrlen;
 char buf[MAX_MSG_SIZE];
 
 typedef struct {
-  char nickname[MAX_ROOM_NAME_LENGTH];
+  // char nickname[MAX_ROOM_NAME_LENGTH];
   int user_id;
+  // bool is_new;
 } User;
 
 typedef struct {
@@ -302,7 +303,6 @@ int add_admin(int socket, int client_id, char* roomName) {
       if (i == chatRooms[room_id].numClients) server_response(socket, "Esse usuário não está no server.\n");
       continue;
     }
-    
     return 0;
   }
 
@@ -336,17 +336,34 @@ int list_rooms(int client_fd) {
 int remove_admin(int socket, int user_id, char* roomName) {
   int room_id = get_room_id_by_name(roomName);
 
-  for (int i = 0; i < chatRooms[room_id].numAdm; i++) {
-    if (chatRooms[room_id].admUser[i] == user_id) {
+  if(is_admin(socket, room_id) == -1) {
+    server_response(socket, "Você não é admin.\n");
+    server_response(socket, "Contacte o admin dor server para receber assistência.\n");
+    return 0;
+  }
+
+  for(int i = 0; i < chatRooms[room_id].numClients; i++) {
+    if(chatRooms[room_id].admUser[i] == user_id) {
+      break;
+    } else {
+      if (i == chatRooms[room_id].numClients) server_response(socket, "Esse usuário não está no server.\n");
+      continue;
+    }
+    return 0;
+  }
+
+  ChatRoom* room = &chatRooms[room_id];
+
+  for (int i = 0; i < room->numAdm; i++) {
+    if (room->admUser[i] == user_id) {
       // Remove o cliente da sala
-      for (int j = i; j < chatRooms[room_id].numAdm - 1; j++) {
-        chatRooms[room_id].admUser[j] = chatRooms[room_id].admUser[j + 1];
+      for (int j = i; j < room->numAdm - 1; j++) {
+        room->admUser[j] = room->admUser[j + 1];
       }
+      room->numAdm--;
       break;
     }
   }
-
-  chatRooms[room_id].numAdm--;
 
   
   server_response(socket, "Menos 1 adm.\n");
@@ -539,17 +556,22 @@ int execute_command(int i, char *input) {
   else if(strncmp(input, "/leave", 6) == 0){
     leave_room(i);
   } 
+  // else if(strncmp(input, "/quit", 5) == 0){
+  //   close_connection(i);
+  // } 
   else {
     int room_id = get_room_id_by_socket(i);
     if(room_id != -1){
       char message[MAX_MSG_SIZE];
       memset(message, '\0', sizeof(message));
-      snprintf(message, sizeof(message), "%s\n", input);
+      snprintf(message, sizeof(message), "user %d: %s\n", i, input);
       send_message(i, room_id, message);
     }else{
       printf("SOCKET %d: %s\n", i, input);
     }
   }
+
+  return 0;
 }
 
 // Função para lidar com um comando recebido
